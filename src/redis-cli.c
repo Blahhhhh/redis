@@ -2014,11 +2014,12 @@ static void getKeyTypes(redisReply *keys, int *types) {
         } else if(reply->type != REDIS_REPLY_STATUS) {
             fprintf(stderr, "Invalid reply type (%d) for TYPE on key '%s'!\n",
                 reply->type, keys->element[i]->str);
-            exit(1);
+            //exit(1);
+            types[i] = TYPE_NONE;
+        } else {
+            types[i] = toIntType(keys->element[i]->str, reply->str);
+            freeReplyObject(reply);
         }
-
-        types[i] = toIntType(keys->element[i]->str, reply->str);
-        freeReplyObject(reply);
     }
 }
 
@@ -2082,9 +2083,9 @@ static void findBigKeys(void) {
     total_keys = getDbSize();
 
     /* Status message */
-    printf("\n# Scanning the entire keyspace to find biggest keys as well as\n");
-    printf("# average sizes per key type.  You can use -i 0.1 to sleep 0.1 sec\n");
-    printf("# per 100 SCAN commands (not usually needed).\n\n");
+    fprintf(stdout, "\n# Scanning the entire keyspace to find biggest keys as well as\n");
+    fprintf(stdout, "# average sizes per key type.  You can use -i 0.1 to sleep 0.1 sec\n");
+    fprintf(stdout, "# per 100 SCAN commands (not usually needed).\n\n");
 
     /* New up sds strings to keep track of overall biggest per type */
     for(i=0;i<TYPE_NONE; i++) {
@@ -2132,7 +2133,7 @@ static void findBigKeys(void) {
             sampled++;
 
             if(biggest[type]<sizes[i]) {
-                printf(
+                fprintf(stdout,
                    "[%05.2f%%] Biggest %-6s found so far '%s' with %llu %s\n",
                    pct, typename[type], keys->element[i]->str, sizes[i],
                    typeunit[type]);
@@ -2149,8 +2150,11 @@ static void findBigKeys(void) {
             }
 
             /* Update overall progress */
+            if(sampled % 1000 == 0) {
+                fflush(stdout);
+            }
             if(sampled % 1000000 == 0) {
-                printf("[%05.2f%%] Sampled %llu keys so far\n", pct, sampled);
+                fprintf(stdout, "[%05.2f%%] Sampled %llu keys so far\n", pct, sampled);
             }
         }
 
@@ -2166,24 +2170,24 @@ static void findBigKeys(void) {
     if(sizes) zfree(sizes);
 
     /* We're done */
-    printf("\n-------- summary -------\n\n");
+    fprintf(stdout, "\n-------- summary -------\n\n");
 
-    printf("Sampled %llu keys in the keyspace!\n", sampled);
-    printf("Total key length in bytes is %llu (avg len %.2f)\n\n",
+    fprintf(stdout, "Sampled %llu keys in the keyspace!\n", sampled);
+    fprintf(stdout, "Total key length in bytes is %llu (avg len %.2f)\n\n",
        totlen, totlen ? (double)totlen/sampled : 0);
 
     /* Output the biggest keys we found, for types we did find */
     for(i=0;i<TYPE_NONE;i++) {
         if(sdslen(maxkeys[i])>0) {
-            printf("Biggest %6s found '%s' has %llu %s\n", typename[i], maxkeys[i],
+            fprintf(stdout, "Biggest %6s found '%s' has %llu %s\n", typename[i], maxkeys[i],
                biggest[i], typeunit[i]);
         }
     }
 
-    printf("\n");
+    fprintf(stdout, "\n");
 
     for(i=0;i<TYPE_NONE;i++) {
-        printf("%llu %ss with %llu %s (%05.2f%% of keys, avg size %.2f)\n",
+        fprintf(stdout, "%llu %ss with %llu %s (%05.2f%% of keys, avg size %.2f)\n",
            counts[i], typename[i], totalsize[i], typeunit[i],
            sampled ? 100 * (double)counts[i]/sampled : 0,
            counts[i] ? (double)totalsize[i]/counts[i] : 0);
